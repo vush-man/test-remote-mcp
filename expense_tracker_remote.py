@@ -11,9 +11,11 @@ print(f"Database path: {DB_PATH}")
 
 mcp = FastMCP("ExpenseTracker")
 
-asyncio def init_db():  # Keep as sync for initialization
+def init_db():  # Keep as sync for initialization
     try:
-        async with aiosqlite.connect(DB_PATH) as c:
+        # Use synchronous sqlite3 just for initialization
+        import sqlite3
+        with sqlite3.connect(DB_PATH) as c:
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("""
                 CREATE TABLE IF NOT EXISTS expenses(
@@ -34,7 +36,7 @@ asyncio def init_db():  # Keep as sync for initialization
         raise
 
 # Initialize database synchronously at module load
-asyncio.run(init_db())
+init_db()
 
 @mcp.tool()
 async def add_expense(date, amount, category, subcategory="", note=""):  # Changed: added async
