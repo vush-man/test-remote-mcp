@@ -68,7 +68,7 @@ async def list_expenses(start_date=None, end_date=None):
             params = []
             if start_date and end_date:
                 query += " WHERE date BETWEEN ? AND ?"
-                params.append([start_date, end_date])
+                params.extend([start_date, end_date])
             elif start_date:
                 query += " WHERE date >= ?"
                 params.append(start_date)
