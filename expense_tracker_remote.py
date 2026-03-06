@@ -56,21 +56,31 @@ async def add_expense(date, amount, category, subcategory="", note=""):  # Chang
         return {"status": "error", "message": f"Database error: {str(e)}"}
     
 @mcp.tool()
-async def list_expenses(start_date, end_date):  # Changed: added async
-    '''List expense entries within an inclusive date range.'''
+async def list_expenses(start_date=None, end_date=None):
+    '''List expense entries within or without an inclusive date range.'''
     try:
-        async with aiosqlite.connect(DB_PATH) as c:  # Changed: added async
-            cur = await c.execute(  # Changed: added await
-                """
+        async with aiosqlite.connect(DB_PATH) as c: 
+            query = """
                 SELECT id, date, amount, category, subcategory, note
                 FROM expenses
-                WHERE date BETWEEN ? AND ?
-                ORDER BY date DESC, id DESC
-                """,
-                (start_date, end_date)
-            )
+                """
+            
+            params = []
+            if start_date and end_date:
+                query += " WHERE date BETWEEN ? AND ?"
+                params.append([start_date, end_date])
+            elif start_date:
+                query += " WHERE date >= ?"
+                params.append(start_date)
+            elif end_date:
+                query += " WHERE date <= ?"
+                params.append(end_date)
+
+            query += " ORDER BY date DESC, id DESC"
+
+            cur = await c.execute(query, params)
             cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, r)) for r in await cur.fetchall()]  # Changed: added await
+            return [dict(zip(cols, r)) for r in await cur.fetchall()]
     except Exception as e:
         return {"status": "error", "message": f"Error listing expenses: {str(e)}"}
 
