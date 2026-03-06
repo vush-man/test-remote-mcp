@@ -7,7 +7,15 @@ import dateutil.parser
 import calendar
 
 def normalize_date(date_str):
-    dt = dateutil.parser.parse(date_str)
+    date_str = date_str.lower().strip()
+
+    if date_str == "today":
+        dt = datetime.today()
+    elif date_str == "yesterday":
+        dt = datetime.today() - timedelta(days=1)
+    else:
+        dt = dateutil.parser.parse(date_str)
+
     return dt.strftime("%Y-%m-%d")
 
 TEMP_DIR = tempfile.gettempdir()
@@ -67,22 +75,43 @@ init_db()
 init_budget_db()
 
 @mcp.tool()
-async def add_expense(date, amount, category, subcategory="", note=""):  
-    '''Add a new expense entry to the database.'''
+async def add_expense(date=None, amount=None, category=None, subcategory="", note=""):
+    """Add a new expense entry to the database."""
     try:
-        date = normalize_date(date)
-        async with aiosqlite.connect(DB_PATH) as c: 
-            cur = await c.execute(  
-                "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
-                (date, amount, category, subcategory, note)
+        if not amount or not category:
+            return {
+                "status": "error",
+                "message": "amount and category are required"
+            }
+
+        if not date:
+            date = datetime.today().strftime("%Y-%m-%d")
+        else:
+            date = normalize_date(date)
+
+        async with aiosqlite.connect(DB_PATH) as c:
+            cur = await c.execute(
+                """
+                INSERT INTO expenses(date, amount, category, subcategory, note)
+                VALUES (?,?,?,?,?)
+                """,
+                (date, amount, category.title(), subcategory, note)
             )
+
             expense_id = cur.lastrowid
-            await c.commit()  
-            return {"status": "success", "expense_id": expense_id, "message": "Expense added successfully"}
-    except Exception as e:  
-        if "readonly" in str(e).lower():
-            return {"status": "error", "message": "Database is in read-only mode. Check file permissions."}
-        return {"status": "error", "message": f"Database error: {str(e)}"}
+            await c.commit()
+
+            return {
+                "status": "success",
+                "expense_id": expense_id,
+                "message": "Expense added successfully"
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Database error: {str(e)}"
+        }
     
 @mcp.tool()
 async def list_expenses(
