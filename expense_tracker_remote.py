@@ -2,6 +2,12 @@ from fastmcp import FastMCP
 import os
 import aiosqlite  # Changed: sqlite3 → aiosqlite
 import tempfile
+import dateutil.parser
+
+def normalize_date(date_str):
+    dt = dateutil.parser.parse(date_str)
+    return dt.strftime("%Y-%m-%d")
+
 # Use temporary directory which should be writable
 TEMP_DIR = tempfile.gettempdir()
 DB_PATH = os.path.join(TEMP_DIR, "expenses.db")
@@ -19,7 +25,7 @@ def init_db():  # Keep as sync for initialization
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("""
                 CREATE TABLE IF NOT EXISTS expenses(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expense_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date TEXT NOT NULL,
                     amount REAL NOT NULL,
                     category TEXT NOT NULL,
@@ -31,6 +37,7 @@ def init_db():  # Keep as sync for initialization
             c.execute("INSERT OR IGNORE INTO expenses(date, amount, category) VALUES ('2000-01-01', 0, 'test')")
             c.execute("DELETE FROM expenses WHERE category = 'test'")
             print("Database initialized successfully with write access")
+            c.execute("DELETE FROM sqlite_sequence WHERE name='expenses'")
     except Exception as e:
         print(f"Database initialization error: {e}")
         raise
@@ -42,6 +49,7 @@ init_db()
 async def add_expense(date, amount, category, subcategory="", note=""):  # Changed: added async
     '''Add a new expense entry to the database.'''
     try:
+        date = normalize_date(date)
         async with aiosqlite.connect(DB_PATH) as c:  # Changed: added async
             cur = await c.execute(  # Changed: added await
                 "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
@@ -49,7 +57,7 @@ async def add_expense(date, amount, category, subcategory="", note=""):  # Chang
             )
             expense_id = cur.lastrowid
             await c.commit()  # Changed: added await
-            return {"status": "success", "id": expense_id, "message": "Expense added successfully"}
+            return {"status": "success", "expense_id": expense_id, "message": "Expense added successfully"}
     except Exception as e:  # Changed: simplified exception handling
         if "readonly" in str(e).lower():
             return {"status": "error", "message": "Database is in read-only mode. Check file permissions."}
@@ -61,7 +69,7 @@ async def list_expenses(start_date=None, end_date=None):
     try:
         async with aiosqlite.connect(DB_PATH) as c: 
             query = """
-                SELECT id, date, amount, category, subcategory, note
+                SELECT expense_id, date, amount, category, subcategory, note
                 FROM expenses
                 """
             
@@ -76,7 +84,7 @@ async def list_expenses(start_date=None, end_date=None):
                 query += " WHERE date <= ?"
                 params.append(end_date)
 
-            query += " ORDER BY date DESC, id DESC"
+            query += " ORDER BY date DESC, expense_id DESC"
 
             cur = await c.execute(query, params)
             cols = [d[0] for d in cur.description]
